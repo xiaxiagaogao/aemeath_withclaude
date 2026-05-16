@@ -10,6 +10,7 @@
     "beforeBuildCommand": ""
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "aemeath",
@@ -27,5 +28,11 @@
     "security": {
       "csp": null
     }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "icon": ["icons/icon.png"],
+    "category": "Utility"
   }
 }

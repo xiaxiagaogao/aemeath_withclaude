@@ -5,7 +5,7 @@
         "matcher": "",
         "hooks": [{
           "type": "command",
-          "command": "powershell -Command \"if (-not (Get-Process -Name 'aemeath-claude' -ErrorAction SilentlyContinue)) { Start-Process 'D:/path/to/aemeath-claude.exe' }\""
+          "command": "pgrep -f aemeath-claude > /dev/null || open -a \"Aemeath Claude Pet\""
         }]
       }
     ],
