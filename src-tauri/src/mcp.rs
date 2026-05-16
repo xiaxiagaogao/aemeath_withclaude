@@ -1,6 +1,7 @@
 use axum::{
     extract::State,
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -24,12 +25,27 @@ struct JsonRpcRequest {
 
 #[derive(Debug, Serialize)]
 struct JsonRpcResponse {
+    jsonrpc: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     id: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<Value>,
+}
+
+impl JsonRpcResponse {
+    fn success(id: Option<Value>, result: Value) -> Self {
+        Self { jsonrpc: "2.0", id, result: Some(result), error: None }
+    }
+    fn error(id: Option<Value>, code: i64, message: impl Into<String>) -> Self {
+        Self {
+            jsonrpc: "2.0",
+            id,
+            result: None,
+            error: Some(json!({ "code": code, "message": message.into() })),
+        }
+    }
 }
 
 pub fn create_mcp_router(state: McpState, tx: broadcast::Sender<StateChangeEvent>) -> Router {
@@ -48,7 +64,11 @@ struct McpAppState {
 async fn handle_mcp_request(
     State(app): State<McpAppState>,
     Json(req): Json<JsonRpcRequest>,
-) -> Json<JsonRpcResponse> {
+) -> Response {
+    if req.id.is_none() {
+        return StatusCode::ACCEPTED.into_response();
+    }
+
     let response = match req.method.as_str() {
         "initialize" => json!({
             "protocolVersion": "2024-11-05",
@@ -140,11 +160,12 @@ async fn handle_mcp_request(
                     json!({ "content": [{ "type": "text", "text": format!("Playing: {}", state_name) }] })
                 }
                 _ => {
-                    return Json(JsonRpcResponse {
-                        id: req.id,
-                        result: None,
-                        error: Some(json!({"code": -32601, "message": format!("Unknown tool: {}", tool_name)})),
-                    });
+                    return Json(JsonRpcResponse::error(
+                        req.id,
+                        -32601,
+                        format!("Unknown tool: {}", tool_name),
+                    ))
+                    .into_response();
                 }
             }
         }
@@ -189,29 +210,27 @@ async fn handle_mcp_request(
                     })
                 }
                 _ => {
-                    return Json(JsonRpcResponse {
-                        id: req.id,
-                        result: None,
-                        error: Some(json!({"code": -32602, "message": format!("Unknown resource: {}", uri)})),
-                    });
+                    return Json(JsonRpcResponse::error(
+                        req.id,
+                        -32602,
+                        format!("Unknown resource: {}", uri),
+                    ))
+                    .into_response();
                 }
             }
         }
 
         _ => {
-            return Json(JsonRpcResponse {
-                id: req.id,
-                result: None,
-                error: Some(json!({"code": -32601, "message": format!("Unknown method: {}", req.method)})),
-            });
+            return Json(JsonRpcResponse::error(
+                req.id,
+                -32601,
+                format!("Unknown method: {}", req.method),
+            ))
+            .into_response();
         }
     };
 
-    Json(JsonRpcResponse {
-        id: req.id,
-        result: Some(response),
-        error: None,
-    })
+    Json(JsonRpcResponse::success(req.id, response)).into_response()
 }
 
 async fn handle_sse() -> StatusCode {
