@@ -79,3 +79,229 @@ html, body {
 #bubble.fade-out {
   opacity: 0;
 }
+
+/* ---- ask-bubble (interactive input) ---- */
+
+#ask-bubble {
+  position: absolute;
+  bottom: 240px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  padding: 10px 14px;
+  min-width: 180px;
+  max-width: 260px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 13px;
+  color: #1e293b;
+  z-index: 10;
+}
+
+#ask-bubble.hidden {
+  display: none;
+}
+
+#ask-prompt {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+#ask-choices {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+#ask-choices button {
+  padding: 4px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  cursor: pointer;
+  font-size: 12px;
+  color: #1e293b;
+}
+
+#ask-choices button:hover {
+  background: #e2e8f0;
+}
+
+#ask-input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  font-size: 13px;
+  margin-top: 6px;
+  outline: none;
+  color: #1e293b;
+}
+
+#ask-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+#ask-send {
+  margin-top: 6px;
+  padding: 4px 16px;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+#ask-send:hover {
+  background: #2563eb;
+}
+
+/* ---- ask-confirm-row ---- */
+
+#ask-confirm-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+#ask-confirm-row.hidden {
+  display: none;
+}
+
+#ask-confirm-row button {
+  flex: 1;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: background 0.15s ease;
+}
+
+#ask-confirm-yes {
+  background: #22c55e;
+  color: white;
+  border-color: #22c55e !important;
+}
+
+#ask-confirm-yes:hover {
+  background: #16a34a;
+}
+
+#ask-confirm-no {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+#ask-confirm-no:hover {
+  background: #e2e8f0;
+  color: #ef4444;
+}
+
+/* ---- ask-input-row ---- */
+
+#ask-input-row.hidden {
+  display: none;
+}
+
+#ask-input-row {
+  display: block;
+}
+
+#ask-choices.hidden {
+  display: none;
+}
+
+/* ---- quick-menu ---- */
+
+#quick-menu {
+  position: absolute;
+  bottom: 260px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 14px;
+  padding: 6px 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 13px;
+  color: #1e293b;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#quick-menu.hidden {
+  display: none;
+}
+
+#quick-menu::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid rgba(255, 255, 255, 0.95);
+}
+
+.quick-menu-item {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1e293b;
+  text-align: left;
+  transition: background 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.quick-menu-item:hover {
+  background: #e2e8f0;
+}
+
+.quick-menu-item[data-action="cancel"] {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.quick-menu-item[data-action="cancel"]:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* ---- pending-dot ---- */
+
+#pending-dot {
+  position: absolute;
+  bottom: 234px;
+  right: 50%;
+  transform: translateX(80px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  z-index: 15;
+  animation: pending-pulse 1.2s ease-in-out infinite;
+}
+
+#pending-dot.hidden {
+  display: none;
+}
+
+@keyframes pending-pulse {
+  0%, 100% { opacity: 0.4; transform: translateX(80px) scale(0.8); }
+  50% { opacity: 1; transform: translateX(80px) scale(1.2); }
+}

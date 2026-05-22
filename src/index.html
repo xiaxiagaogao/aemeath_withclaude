@@ -10,6 +10,24 @@
   <div id="pet-container">
     <div id="sprite"></div>
     <div id="bubble" class="hidden"></div>
+    <div id="ask-bubble" class="hidden">
+      <div id="ask-prompt"></div>
+      <div id="ask-choices"></div>
+      <div id="ask-confirm-row" class="hidden">
+        <button id="ask-confirm-yes">确认</button>
+        <button id="ask-confirm-no">否定</button>
+      </div>
+      <div id="ask-input-row">
+        <input id="ask-input" type="text" placeholder="输入...">
+        <button id="ask-send">发送</button>
+      </div>
+    </div>
+    <div id="quick-menu" class="hidden">
+      <button class="quick-menu-item" data-action="message">💬 发消息</button>
+      <button class="quick-menu-item" data-action="voice">🎤 语音输入</button>
+      <button class="quick-menu-item" data-action="cancel">✕ 取消</button>
+    </div>
+    <div id="pending-dot" class="hidden"></div>
   </div>
   <script src="sprite-animator.js"></script>
   <script src="bubble.js"></script>
