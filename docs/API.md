@@ -273,7 +273,8 @@ Aemeath Pet (Tauri Desktop App)
 #### POST `/api/user/message`
 
 前端发送用户消息（用户主动通过宠物发送，非 MCP 请求）。
-后端收到后通过 Windows API 找到 Claude Code 终端窗口，自动粘贴消息回车发送。
+后端启动时通过 `GetForegroundWindow()` 捕获 Claude Code 终端窗口句柄，可直接精准粘贴。
+若未捕获到（手动启动），则回退到 `EnumWindows` 搜索标题含 "claude" 的窗口。
 
 **请求体：**
 ```json

@@ -134,7 +134,7 @@ MCP Tool 调用
 
 ### 6. 双向消息同步
 
-用户可在爱弥斯右键菜单中选择"发消息"，输入内容后发送。后端通过 Windows API 枚举终端窗口，找到 Claude Code 所在窗口，自动粘贴消息并回车，实现宠物 → Claude Code 的消息同步。
+用户可在爱弥斯右键菜单中选择"发消息"，输入内容后发送。爱弥斯启动时通过 `GetForegroundWindow()` 捕获 Claude Code 终端窗口 HWND，后续发消息直接用该 HWND 粘贴，无需搜索窗口。若启动时未捕获到（手动启动场景），则回退到 EnumWindows 搜索。
 
 新端点：
 - `POST /api/user/message` — 接收用户消息

@@ -14,6 +14,15 @@ use tauri::Emitter;
 
 #[tokio::main]
 async fn main() {
+    // Capture the foreground window HWND before Tauri creates its own window.
+    // At startup (triggered by Claude Code), the foreground window is the Claude Code terminal.
+    let claude_hwnd: Arc<std::sync::Mutex<isize>> = Arc::new(std::sync::Mutex::new(0));
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        *claude_hwnd.lock().unwrap() = hwnd;
+        println!("Claude Code HWND bound: {}", hwnd);
+    }
+
     let state_manager = Arc::new(Mutex::new(StateManager::new()));
     let (tx, _rx) = broadcast::channel::<StateChangeEvent>(32);
     let pending_input: PendingInputSlot = Arc::new(Mutex::new(None));
@@ -21,10 +30,11 @@ async fn main() {
     let sm_http = state_manager.clone();
     let tx_http = tx.clone();
     let pi_http = pending_input.clone();
+    let hwnd_http = claude_hwnd.clone();
 
     // Spawn HTTP server on :9527
     tokio::spawn(async move {
-        let app = http::create_router(sm_http, tx_http, pi_http);
+        let app = http::create_router(sm_http, tx_http, pi_http, hwnd_http);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:9527").await.unwrap();
         println!("HTTP server listening on http://127.0.0.1:9527");
         axum::serve(listener, app).await.unwrap();
@@ -79,6 +89,10 @@ async fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Aemeath Pet");
+}
+
+extern "system" {
+    fn GetForegroundWindow() -> isize;
 }
 
 #[tauri::command]
