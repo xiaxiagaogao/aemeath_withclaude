@@ -44,7 +44,7 @@ async fn main() {
 
     // Build Tauri app
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![start_drag])
+        .invoke_handler(tauri::generate_handler![start_drag, hide_window, exit_app])
         .setup(move |app| {
             // Listen to broadcast channel, forward state changes to frontend
             let handle = app.handle().clone();
@@ -84,4 +84,14 @@ async fn main() {
 #[tauri::command]
 fn start_drag(window: tauri::Window) {
     let _ = window.start_dragging();
+}
+
+#[tauri::command]
+fn hide_window(window: tauri::Window) {
+    let _ = window.hide();
+}
+
+#[tauri::command]
+fn exit_app(app: tauri::AppHandle) {
+    app.exit(0);
 }
