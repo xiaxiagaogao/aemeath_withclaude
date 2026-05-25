@@ -84,7 +84,9 @@ html, body {
 
 #ask-bubble {
   position: absolute;
-  bottom: 240px;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
   border-radius: 14px;
   padding: 10px 14px;
@@ -145,9 +147,31 @@ html, body {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
-#ask-send {
+#ask-input-btns {
+  display: flex;
+  gap: 8px;
   margin-top: 6px;
-  padding: 4px 16px;
+}
+
+#ask-back {
+  flex: 1;
+  padding: 5px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+#ask-back:hover {
+  background: #e2e8f0;
+}
+
+#ask-send {
+  flex: 2;
+  padding: 5px 14px;
   border-radius: 8px;
   background: #3b82f6;
   color: white;
@@ -222,7 +246,9 @@ html, body {
 
 #quick-menu {
   position: absolute;
-  bottom: 260px;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
   border-radius: 14px;
   padding: 6px 4px;

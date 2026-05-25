@@ -157,10 +157,7 @@ class Bubble {
 
     const menu = document.getElementById('quick-menu');
     menu.classList.remove('hidden');
-    // Auto-hide after 5s
-    setTimeout(() => {
-      if (!menu.classList.contains('hidden')) menu.classList.add('hidden');
-    }, 5000);
+    // Stays open until user clicks elsewhere or selects an option
   }
 
   /** Hide quick menu */
