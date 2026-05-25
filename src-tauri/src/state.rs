@@ -57,6 +57,7 @@ pub struct StateManager {
     current_tool: Option<String>,
     history: Vec<StateRecord>,
     pub last_transition: u64,
+    pub pending_messages: Vec<String>,
 }
 
 impl PetState {
@@ -155,6 +156,7 @@ impl StateManager {
             current_tool: None,
             history: Vec::new(),
             last_transition: 0,
+            pending_messages: Vec::new(),
         }
     }
 
@@ -204,6 +206,14 @@ impl StateManager {
 
     pub fn history(&self) -> &Vec<StateRecord> {
         &self.history
+    }
+
+    pub fn push_message(&mut self, msg: String) {
+        self.pending_messages.push(msg);
+    }
+
+    pub fn drain_messages(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_messages)
     }
 }
 

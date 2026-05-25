@@ -385,6 +385,11 @@ async fn handle_mcp_request(
                     "uri": "aemeath://history",
                     "name": "State History",
                     "description": "Recent state change records"
+                },
+                {
+                    "uri": "aemeath://user-messages",
+                    "name": "User Messages",
+                    "description": "Pending user messages sent from the pet UI — read to receive and clear them"
                 }
             ]
         }),
@@ -410,6 +415,21 @@ async fn handle_mcp_request(
                         "contents": [{
                             "uri": "aemeath://history",
                             "text": serde_json::to_string(history).unwrap_or_default()
+                        }]
+                    })
+                }
+                "aemeath://user-messages" => {
+                    let mut mgr = app.state.lock().await;
+                    let msgs = mgr.drain_messages();
+                    let text = if msgs.is_empty() {
+                        "(no pending messages)".to_string()
+                    } else {
+                        msgs.join("\n---\n")
+                    };
+                    json!({
+                        "contents": [{
+                            "uri": "aemeath://user-messages",
+                            "text": text
                         }]
                     })
                 }
