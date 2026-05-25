@@ -31,3 +31,5 @@ node_modules/
 
 # Debug tracking
 debug/
+src-tauri/target-gnu/
+.work/

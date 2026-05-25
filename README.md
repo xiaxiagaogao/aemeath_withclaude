@@ -1,6 +1,6 @@
 # Aemeath Claude Code Pet
 
-Q 版像素爱弥斯桌宠，通过 HTTP hooks 与 Claude Code 实时联动。基于 MIT 像素小人素材制作，参考《鸣潮》爱弥斯官方视觉设定。
+Q 版像素爱弥斯桌宠，通过 HTTP hooks 与 MCP 与 Claude Code 实时联动。基于 MIT 像素小人素材制作，参考《鸣潮》爱弥斯官方视觉设定。
 
 > 这是粉丝制作的桌宠项目，不是库洛游戏或《鸣潮》的官方项目。
 
@@ -12,7 +12,7 @@ Q 版像素爱弥斯桌宠，通过 HTTP hooks 与 Claude Code 实时联动。�
 - 透明无边框桌面悬浮窗，始终置顶，可拖拽，不占任务栏
 - 系统托盘驻留，左键切换显隐，右键菜单
 - 随 Claude Code 自动启动，不重复创建实例
-- 权限请求时 waving + 气泡提醒
+- **双向交互**：通过 MCP 工具让 Claude 向用户发起输入请求（文本/确认/下拉选择）
 
 ## 联动效果
 
@@ -30,6 +30,28 @@ Q 版像素爱弥斯桌宠，通过 HTTP hooks 与 Claude Code 实时联动。�
 | 权限请求 | waving | "等待指示..." |
 | 空闲 | idle | — |
 
+## MCP 工具
+
+通过 MCP 协议，Claude 可以：
+
+| 工具 | 功能 |
+|------|------|
+| `aemeath_show` | 显示自定义气泡消息 |
+| `aemeath_ask` | 向用户展示问题（非阻塞） |
+| `aemeath_play` | 强制播放指定动画 |
+| `aemeath_get_user_input` | 阻塞等待用户输入（支持文本/确认/下拉选择） |
+
+**示例：让 Claude 向用户请求确认**
+```
+用户: 删除这个文件
+Claude: 调用 aemeath_get_user_input(type="confirm", prompt="确定要删除吗？")
+宠物: 显示是/否按钮
+用户: 点击"是"
+Claude: 执行删除操作
+```
+
+详细 API 文档见 [docs/API.md](docs/API.md)
+
 ## 架构
 
 ```
@@ -41,7 +63,7 @@ Aemeath Pet (Tauri Desktop App)
   ├── HTTP Server (:9527)   → 接收 hook 推送 + 前端轮询
   ├── MCP Server (:9528)    → 富交互（tools / resources）
   ├── State Manager (Rust)  → 状态机 + 气泡锁
-  └── WebView Frontend      → CSS sprite 动画 + 气泡 + 拖拽
+  └── WebView Frontend      → CSS sprite 动画 + 气泡 + 输入 UI
 ```
 
 ## 安装
@@ -55,7 +77,7 @@ npm install
 cargo build --manifest-path src-tauri/Cargo.toml --release
 ```
 
-产出在 `src-tauri/target/release/`。
+产出在 `src-tauri/target/release/` 。
 
 ### 2. 配置 Claude Code
 
@@ -89,7 +111,7 @@ cargo build --manifest-path src-tauri/Cargo.toml --release
 aemeath-claude/
 ├── src-tauri/        # Rust 后端 (Tauri + axum)
 ├── src/              # WebView 前端 (HTML/CSS/JS)
-├── docs/             # hooks 与 MCP 配置模板
+├── docs/             # hooks 与 MCP 配置模板 + API 文档
 ├── CLAUDE.md         # 项目指南
 ├── LICENSE
 └── package.json

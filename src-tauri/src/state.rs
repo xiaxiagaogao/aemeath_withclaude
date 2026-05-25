@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PetState {
@@ -31,7 +31,24 @@ pub struct StateRecord {
 pub struct StateChangeEvent {
     pub animation: String,
     pub bubble: String,
+    pub core_signal: String,
+    pub tool_label: Option<String>,
+    pub overlay: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_type: Option<String>,       // "text" | "confirm" | "select"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<String>>,     // choices for select
 }
+
+/// Pending user input: oneshot sender + metadata about the input type
+#[derive(Debug)]
+pub struct PendingInput {
+    pub tx: oneshot::Sender<String>,
+    pub input_type: String,            // "text" | "confirm" | "select"
+    pub options: Option<Vec<String>>,  // choices for select
+}
+
+pub type PendingInputSlot = Arc<Mutex<Option<PendingInput>>>;
 
 pub type SharedState = Arc<Mutex<StateManager>>;
 
@@ -40,6 +57,7 @@ pub struct StateManager {
     current_tool: Option<String>,
     history: Vec<StateRecord>,
     pub last_transition: u64,
+    pub pending_messages: Vec<String>,
 }
 
 impl PetState {
@@ -81,6 +99,28 @@ impl PetState {
         }
     }
 
+    /// 3-signal layer: running / waiting / ready / idle
+    pub fn core_signal(&self) -> &'static str {
+        match self {
+            PetState::Idle | PetState::Waving | PetState::Jumping => "idle",
+            PetState::Thinking | PetState::Permission => "waiting",
+            PetState::Chatting | PetState::Fetching | PetState::Searching
+            | PetState::Analyzing | PetState::Building => "running",
+            PetState::Running => "running",
+            PetState::Review | PetState::Celebrating => "ready",
+            PetState::Failed => "idle",
+        }
+    }
+
+    /// Overlay label: permission / error / None
+    pub fn overlay(&self) -> Option<&'static str> {
+        match self {
+            PetState::Permission => Some("permission"),
+            PetState::Failed => Some("error"),
+            _ => None,
+        }
+    }
+
     pub fn bubble_text(&self, tool: Option<&str>) -> &'static str {
         match self {
             PetState::Thinking => "",
@@ -116,6 +156,7 @@ impl StateManager {
             current_tool: None,
             history: Vec::new(),
             last_transition: 0,
+            pending_messages: Vec::new(),
         }
     }
 
@@ -165,6 +206,14 @@ impl StateManager {
 
     pub fn history(&self) -> &Vec<StateRecord> {
         &self.history
+    }
+
+    pub fn push_message(&mut self, msg: String) {
+        self.pending_messages.push(msg);
+    }
+
+    pub fn drain_messages(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_messages)
     }
 }
 
@@ -256,5 +305,31 @@ mod tests {
         assert_eq!(PetState::Analyzing.bubble_text(None), "正在分析...");
         assert_eq!(PetState::Building.bubble_text(None), "正在构建...");
         assert_eq!(PetState::Celebrating.bubble_text(None), "太棒了!");
+    }
+
+    #[test]
+    fn test_core_signal_mapping() {
+        assert_eq!(PetState::Idle.core_signal(), "idle");
+        assert_eq!(PetState::Waving.core_signal(), "idle");
+        assert_eq!(PetState::Jumping.core_signal(), "idle");
+        assert_eq!(PetState::Thinking.core_signal(), "waiting");
+        assert_eq!(PetState::Permission.core_signal(), "waiting");
+        assert_eq!(PetState::Running.core_signal(), "running");
+        assert_eq!(PetState::Chatting.core_signal(), "running");
+        assert_eq!(PetState::Fetching.core_signal(), "running");
+        assert_eq!(PetState::Searching.core_signal(), "running");
+        assert_eq!(PetState::Analyzing.core_signal(), "running");
+        assert_eq!(PetState::Building.core_signal(), "running");
+        assert_eq!(PetState::Review.core_signal(), "ready");
+        assert_eq!(PetState::Celebrating.core_signal(), "ready");
+        assert_eq!(PetState::Failed.core_signal(), "idle");
+    }
+
+    #[test]
+    fn test_overlay_mapping() {
+        assert_eq!(PetState::Permission.overlay(), Some("permission"));
+        assert_eq!(PetState::Failed.overlay(), Some("error"));
+        assert_eq!(PetState::Running.overlay(), None);
+        assert_eq!(PetState::Idle.overlay(), None);
     }
 }
