@@ -106,6 +106,7 @@ Claude Code hooks 触发的端点：
 **Resources（可读取状态）：**
 - `aemeath://status` — 当前状态
 - `aemeath://history` — 状态历史
+- `aemeath://user-messages` — 获取并清除用户通过宠物 UI 发送的消息
 
 ### 4. 双向交互机制
 
@@ -127,9 +128,26 @@ MCP Tool 调用
 ```
 
 支持的输入类型：
-- `text` — 文本输入框 + 提交按钮
+- `text` — 文本输入框 + 发送/返回按钮
 - `confirm` — 是/否 两个按钮
 - `select` — 下拉选择框
+
+### 6. 双向消息同步
+
+用户可在爱弥斯右键菜单中选择"发消息"，输入内容后发送。后端通过 Windows API 枚举终端窗口，找到 Claude Code 所在窗口，自动粘贴消息并回车，实现宠物 → Claude Code 的消息同步。
+
+新端点：
+- `POST /api/user/message` — 接收用户消息
+- `GET /api/user/message/pending` — 查询待处理消息
+- MCP Resource `aemeath://user-messages` — 读取并清除用户消息
+
+### 7. 托盘控制
+
+右键菜单支持：
+- 休眠 — 隐藏窗口，通过托盘右键恢复
+- 关机 — 退出程序
+- 发消息 — 打开输入气泡
+- 语音输入 — 暂未支持
 
 ### 5. 气泡锁机制
 

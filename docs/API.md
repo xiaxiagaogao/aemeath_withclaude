@@ -188,6 +188,10 @@ Aemeath Pet (Tauri Desktop App)
 
 获取最近的状态变更记录（最多 50 条）。
 
+#### `aemeath://user-messages`
+
+获取并清除用户通过宠物 UI 发送的消息。读取后消息即清除，空时返回 `(no pending messages)`。
+
 ---
 
 ## HTTP API (端口 9527)
@@ -263,6 +267,30 @@ Aemeath Pet (Tauri Desktop App)
 {
   "value": "用户输入的内容",
   "type": "text"
+}
+```
+
+#### POST `/api/user/message`
+
+前端发送用户消息（用户主动通过宠物发送，非 MCP 请求）。
+后端收到后通过 Windows API 找到 Claude Code 终端窗口，自动粘贴消息回车发送。
+
+**请求体：**
+```json
+{
+  "value": "用户通过宠物发送的消息"
+}
+```
+
+#### GET `/api/user/message/pending`
+
+获取并清除待处理的用户消息（供 MCP 资源使用）。
+
+**响应：**
+```json
+{
+  "count": 2,
+  "messages": ["消息1", "消息2"]
 }
 ```
 
