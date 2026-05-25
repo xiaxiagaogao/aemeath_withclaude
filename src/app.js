@@ -13,6 +13,7 @@ let lastOverlay = '';
 let inputPending = false;
 let lastEventTime = 0;
 let fallbackTimer = null;
+let tauriListenerActive = false;
 
 // Phase 3 new vars
 let clickStart = null;
@@ -30,32 +31,42 @@ async function init() {
   window._petAnimator = animator;
 
   const ipc = window.__TAURI_INTERNALS__;
-  document.addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
-    try { if (ipc && ipc.invoke) ipc.invoke('start_drag'); } catch (_) {}
-  });
 
-  // Phase 3: click sprite → quick menu (distinguish click from drag)
-  spriteEl.addEventListener('mousedown', (e) => {
+  // Unified mouse handling: drag on move, click on release without move
+  document.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     clickStart = { x: e.clientX, y: e.clientY, time: Date.now() };
   });
-  spriteEl.addEventListener('mouseup', (e) => {
+
+  document.addEventListener('mousemove', (e) => {
     if (!clickStart) return;
     const dx = Math.abs(e.clientX - clickStart.x);
     const dy = Math.abs(e.clientY - clickStart.y);
-    const dt = Date.now() - clickStart.time;
-    clickStart = null;
-    if (dx < 5 && dy < 5 && dt < 400) {
-      bubble.showQuickMenu();
+    if (dx > 3 || dy > 3) {
+      clickStart = null;
+      try { if (ipc && ipc.invoke) ipc.invoke('start_drag'); } catch (_) {}
     }
   });
 
-  setupEventListener();
+  document.addEventListener('mouseup', () => {
+    clickStart = null;
+  });
+
+  // Right-click on sprite → quick menu
+  spriteEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    bubble.showQuickMenu();
+  });
+
+  // Suppress browser right-click menu everywhere else
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Independent setups first (event listener goes last — it must not block others)
   setupInteractiveInput();
   setupQuickMenu();
   setupConfirmButtons();
   startFallbackPoll();
+  setupEventListener();
 
   // Expose for bubble.js choice buttons
   window._sendUserInput = sendUserInput;
@@ -64,30 +75,42 @@ async function init() {
 // ========== Tauri event listener (primary channel) ==========
 
 function setupEventListener() {
-  window.__TAURI_INTERNALS__.listen('state-change', (event) => {
-    lastEventTime = Date.now();
-    const { animation, bubble: bubbleText, core_signal, tool_label, overlay,
-            input_type, options } = event.payload;
+  const ipc = window.__TAURI_INTERNALS__;
+  if (!ipc || typeof ipc.listen !== 'function') {
+    console.warn('Tauri IPC not available, state updates via polling only');
+    return;
+  }
+  try {
+    ipc.listen('state-change', (event) => {
+      tauriListenerActive = true;
+      lastEventTime = Date.now();
+      const { animation, bubble: bubbleText, core_signal, tool_label, overlay,
+              input_type, options } = event.payload;
 
-    if (animation) {
-      animator.play(animation);
-    }
+      if (animation) {
+        animator.play(animation);
+      }
 
-    updateBubbleStates(bubbleText, core_signal, overlay, input_type, options);
-    handleIdleAnimation(animation);
+      updateBubbleStates(bubbleText, core_signal, overlay, input_type, options);
+      handleIdleAnimation(animation);
 
-    lastCoreSignal = core_signal;
-    lastOverlay = overlay || '';
-  });
+      lastCoreSignal = core_signal;
+      lastOverlay = overlay || '';
+    });
+  } catch (e) {
+    console.warn('Tauri listen failed, using polling only', e);
+  }
 }
 
 // ========== Fallback polling (2s, only when Tauri events stale) ==========
 
 function startFallbackPoll() {
   if (fallbackTimer) return;
+  // Poll every 2s; always poll as safety net (Tauri events are primary but may miss)
   fallbackTimer = setInterval(async () => {
-    // Only activate fallback if no Tauri event for 3s
-    if (Date.now() - lastEventTime < 3000) return;
+    // If Tauri listener is active and recent, skip poll to save bandwidth
+    if (tauriListenerActive && Date.now() - lastEventTime < 3000) return;
+
     try {
       const r = await fetch('http://127.0.0.1:9527/api/current');
       if (r.ok) {
@@ -219,6 +242,7 @@ function updateBubbleStates(bubbleText, coreSignal, overlay, inputType, options)
 function setupInteractiveInput() {
   const askSend = document.getElementById('ask-send');
   const askInput = document.getElementById('ask-input');
+  const askBack = document.getElementById('ask-back');
 
   askSend.addEventListener('click', () => {
     const value = askInput.value.trim();
@@ -230,6 +254,12 @@ function setupInteractiveInput() {
       const value = askInput.value.trim();
       if (value) sendUserInput(value);
     }
+  });
+
+  askBack.addEventListener('click', (e) => {
+    e.stopPropagation();
+    bubble.hideInteractive();
+    bubble.showQuickMenu();
   });
 }
 
@@ -260,15 +290,19 @@ function setupQuickMenu() {
       bubble.hideQuickMenu();
       switch (action) {
         case 'message':
-          // Open text input bubble
           bubble.showInteractive('发消息给爱弥斯...', 'text', null, '输入消息...');
-          // Set up manual send that goes through the user input path
           break;
         case 'voice':
           bubble.show('语音输入暂不支持~');
           break;
+        case 'sleep':
+          try { window.__TAURI_INTERNALS__?.invoke('hide_window'); } catch (_) {}
+          bubble.show('爱弥斯已休眠，右键托盘唤醒~');
+          break;
+        case 'exit':
+          try { window.__TAURI_INTERNALS__?.invoke('exit_app'); } catch (_) {}
+          break;
         case 'cancel':
-          // Already hidden above
           break;
       }
     });
@@ -287,26 +321,33 @@ function setupQuickMenu() {
 // ========== Send user input ==========
 
 async function sendUserInput(value, type = 'text') {
-  // C4: user-initiated message (no pending MCP input) — show directly as bubble
-  if (!inputPending) {
-    if (bubble) {
-      lastBubble = value;
-      bubble.hideInteractive();
-      bubble.showPersistent(value);
-    }
+  // MCP-initiated input: forward to backend pending-input slot
+  if (inputPending) {
+    try {
+      await fetch('http://127.0.0.1:9527/api/user/input', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value, type }),
+      });
+    } catch (_) {}
+    if (bubble) bubble.hideInteractive();
+    inputPending = false;
     return;
   }
 
-  // MCP-initiated input: forward to backend pending-input slot
+  // User-initiated message: relay to backend for Claude Code to pick up
   try {
-    await fetch('http://127.0.0.1:9527/api/user/input', {
+    await fetch('http://127.0.0.1:9527/api/user/message', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value, type }),
+      body: JSON.stringify({ value }),
     });
   } catch (_) {}
-  if (bubble) bubble.hideInteractive();
-  inputPending = false;
+  if (bubble) {
+    lastBubble = value;
+    bubble.hideInteractive();
+    bubble.showPersistent(value);
+  }
 }
 
 // ========== Permission helpers ==========

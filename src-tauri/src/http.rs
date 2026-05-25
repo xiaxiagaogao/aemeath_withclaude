@@ -6,8 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::sync::Arc;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::state::{PendingInputSlot, PetState, SharedState, StateChangeEvent};
@@ -32,7 +31,12 @@ pub struct CurrentResponse {
 pub struct UserInputRequest {
     pub value: String,
     #[serde(rename = "type", default)]
-    pub input_type: Option<String>,
+    pub _input_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UserMessageRequest {
+    pub value: String,
 }
 
 pub fn create_router(
@@ -56,6 +60,8 @@ pub fn create_router(
         .route("/api/hook/permission", post(handle_hook_permission))
         .route("/api/user/input", post(handle_user_input))
         .route("/api/user/pending", get(handle_user_pending))
+        .route("/api/user/message", post(handle_user_message))
+        .route("/api/user/message/pending", get(handle_user_message_pending))
         .layer(cors)
         .with_state(AppState {
             state,
@@ -247,4 +253,127 @@ async fn handle_user_pending(
     } else {
         Json(json!({ "waiting": false }))
     }
+}
+
+/// POST /api/user/message — receive message from pet UI, relay to Claude Code terminal
+async fn handle_user_message(
+    State(app): State<AppState>,
+    Json(body): Json<UserMessageRequest>,
+) -> StatusCode {
+    let msg = body.value.clone();
+    let mut mgr = app.state.lock().await;
+    mgr.push_message(msg.clone());
+    drop(mgr);
+
+    // Relay the message to Claude Code terminal as keystrokes
+    relay_to_terminal(&msg);
+
+    StatusCode::OK
+}
+
+/// Find the Claude Code terminal window via Windows API and paste the message.
+fn relay_to_terminal(msg: &str) {
+    use std::os::windows::process::CommandExt;
+
+    // 1. Copy message to clipboard via a simple PowerShell one-liner
+    let escaped = msg.replace('\'', "''");
+    let set_clip = format!("Set-Clipboard -Value '{}'", escaped);
+    let _ = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &set_clip])
+        .creation_flags(0x08000000)
+        .output();
+
+    // 2. Find Claude Code window and paste
+    std::thread::spawn(|| {
+        unsafe {
+            find_and_paste();
+        }
+    });
+}
+
+// ---- Windows API FFI ----
+
+use std::sync::Mutex;
+
+static FOUND_HWND: Mutex<isize> = Mutex::new(0);
+
+// Search terms for finding the Claude Code terminal window
+const SEARCH_TERMS: &[&str] = &["claude", "powershell", "pwsh"];
+
+unsafe extern "system" fn enum_callback(hwnd: isize, _lparam: isize) -> i32 {
+    if IsWindowVisible(hwnd) == 0 {
+        return 1;
+    }
+    let mut buf = [0u16; 512];
+    let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), 512);
+    if len > 0 {
+        let title = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
+        for term in SEARCH_TERMS {
+            if title.contains(term) {
+                *FOUND_HWND.lock().unwrap() = hwnd;
+                return 0; // stop
+            }
+        }
+    }
+    1 // continue
+}
+
+unsafe fn find_and_paste() {
+    {
+        *FOUND_HWND.lock().unwrap() = 0;
+    }
+    EnumWindows(Some(enum_callback), 0);
+    let hwnd = *FOUND_HWND.lock().unwrap();
+
+    if hwnd == 0 {
+        return;
+    }
+
+    // Save current foreground window so we can restore focus after pasting
+    let prev = GetForegroundWindow();
+
+    // Briefly activate Claude Code window to paste
+    ShowWindow(hwnd, 9); // SW_RESTORE
+    SetForegroundWindow(hwnd);
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Ctrl+V
+    keybd_event(0x11, 0, 0, 0);
+    keybd_event(0x56, 0, 0, 0);
+    keybd_event(0x56, 0, 2, 0);
+    keybd_event(0x11, 0, 2, 0);
+
+    std::thread::sleep(std::time::Duration::from_millis(80));
+
+    // Enter
+    keybd_event(0x0D, 0, 0, 0);
+    keybd_event(0x0D, 0, 2, 0);
+
+    // Restore previous foreground window
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    if prev != 0 {
+        SetForegroundWindow(prev);
+    }
+}
+
+extern "system" {
+    fn EnumWindows(cb: Option<unsafe extern "system" fn(isize, isize) -> i32>, lp: isize) -> i32;
+    fn GetWindowTextW(hwnd: isize, text: *mut u16, max: i32) -> i32;
+    fn IsWindowVisible(hwnd: isize) -> i32;
+    fn SetForegroundWindow(hwnd: isize) -> i32;
+    fn GetForegroundWindow() -> isize;
+    fn ShowWindow(hwnd: isize, cmd: i32) -> i32;
+    fn keybd_event(vk: u8, scan: u8, flags: u32, extra: usize);
+}
+
+/// GET /api/user/message/pending — return and clear pending user messages
+async fn handle_user_message_pending(
+    State(app): State<AppState>,
+) -> Json<serde_json::Value> {
+    let mut mgr = app.state.lock().await;
+    let msgs = mgr.drain_messages();
+    Json(json!({
+        "messages": msgs,
+        "count": msgs.len(),
+    }))
 }
