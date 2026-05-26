@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -43,6 +44,7 @@ pub fn create_router(
     state: SharedState,
     tx: broadcast::Sender<StateChangeEvent>,
     pending_input: PendingInputSlot,
+    claude_hwnd: Arc<std::sync::Mutex<isize>>,
 ) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -67,6 +69,7 @@ pub fn create_router(
             state,
             tx,
             pending_input,
+            claude_hwnd,
         })
 }
 
@@ -75,6 +78,7 @@ struct AppState {
     state: SharedState,
     tx: broadcast::Sender<StateChangeEvent>,
     pending_input: PendingInputSlot,
+    claude_hwnd: Arc<std::sync::Mutex<isize>>,
 }
 
 /// Helper: build a StateChangeEvent from state + tool, with derived core_signal/overlay
@@ -265,17 +269,19 @@ async fn handle_user_message(
     mgr.push_message(msg.clone());
     drop(mgr);
 
+    let hwnd = *app.claude_hwnd.lock().unwrap();
+
     // Relay the message to Claude Code terminal as keystrokes
-    relay_to_terminal(&msg);
+    relay_to_terminal(&msg, hwnd);
 
     StatusCode::OK
 }
 
-/// Find the Claude Code terminal window via Windows API and paste the message.
-fn relay_to_terminal(msg: &str) {
+/// Copy message to clipboard, then paste into the Claude Code terminal window.
+fn relay_to_terminal(msg: &str, hwnd: isize) {
     use std::os::windows::process::CommandExt;
 
-    // 1. Copy message to clipboard via a simple PowerShell one-liner
+    // 1. Copy message to clipboard
     let escaped = msg.replace('\'', "''");
     let set_clip = format!("Set-Clipboard -Value '{}'", escaped);
     let _ = std::process::Command::new("powershell")
@@ -283,22 +289,20 @@ fn relay_to_terminal(msg: &str) {
         .creation_flags(0x08000000)
         .output();
 
-    // 2. Find Claude Code window and paste
-    std::thread::spawn(|| {
+    // 2. Paste into Claude Code window
+    std::thread::spawn(move || {
         unsafe {
-            find_and_paste();
+            paste_to_window(hwnd);
         }
     });
 }
 
 // ---- Windows API FFI ----
 
-use std::sync::Mutex;
-
-static FOUND_HWND: Mutex<isize> = Mutex::new(0);
+static FOUND_HWND: std::sync::Mutex<isize> = std::sync::Mutex::new(0);
 
 // Search terms for finding the Claude Code terminal window
-const SEARCH_TERMS: &[&str] = &["claude", "powershell", "pwsh"];
+const SEARCH_TERMS: &[&str] = &["claude"];
 
 unsafe extern "system" fn enum_callback(hwnd: isize, _lparam: isize) -> i32 {
     if IsWindowVisible(hwnd) == 0 {
@@ -318,21 +322,25 @@ unsafe extern "system" fn enum_callback(hwnd: isize, _lparam: isize) -> i32 {
     1 // continue
 }
 
-unsafe fn find_and_paste() {
+unsafe fn paste_to_window(bound_hwnd: isize) {
+    // 1. Search for the current topmost "claude" window
     {
         *FOUND_HWND.lock().unwrap() = 0;
     }
     EnumWindows(Some(enum_callback), 0);
-    let hwnd = *FOUND_HWND.lock().unwrap();
+    let mut hwnd = *FOUND_HWND.lock().unwrap();
+
+    // 2. Fall back to bound HWND if search found nothing (e.g. terminal minimized)
+    if hwnd == 0 && bound_hwnd != 0 && IsWindow(bound_hwnd) != 0 {
+        hwnd = bound_hwnd;
+    }
 
     if hwnd == 0 {
         return;
     }
 
-    // Save current foreground window so we can restore focus after pasting
     let prev = GetForegroundWindow();
 
-    // Briefly activate Claude Code window to paste
     ShowWindow(hwnd, 9); // SW_RESTORE
     SetForegroundWindow(hwnd);
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -349,7 +357,7 @@ unsafe fn find_and_paste() {
     keybd_event(0x0D, 0, 0, 0);
     keybd_event(0x0D, 0, 2, 0);
 
-    // Restore previous foreground window
+    // Restore previous focus
     std::thread::sleep(std::time::Duration::from_millis(150));
     if prev != 0 {
         SetForegroundWindow(prev);
@@ -360,6 +368,7 @@ extern "system" {
     fn EnumWindows(cb: Option<unsafe extern "system" fn(isize, isize) -> i32>, lp: isize) -> i32;
     fn GetWindowTextW(hwnd: isize, text: *mut u16, max: i32) -> i32;
     fn IsWindowVisible(hwnd: isize) -> i32;
+    fn IsWindow(hwnd: isize) -> i32;
     fn SetForegroundWindow(hwnd: isize) -> i32;
     fn GetForegroundWindow() -> isize;
     fn ShowWindow(hwnd: isize, cmd: i32) -> i32;
