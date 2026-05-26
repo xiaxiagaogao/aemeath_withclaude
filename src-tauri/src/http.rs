@@ -302,7 +302,7 @@ fn relay_to_terminal(msg: &str, hwnd: isize) {
 static FOUND_HWND: std::sync::Mutex<isize> = std::sync::Mutex::new(0);
 
 // Search terms for finding the Claude Code terminal window
-const SEARCH_TERMS: &[&str] = &["claude", "powershell", "pwsh"];
+const SEARCH_TERMS: &[&str] = &["claude"];
 
 unsafe extern "system" fn enum_callback(hwnd: isize, _lparam: isize) -> i32 {
     if IsWindowVisible(hwnd) == 0 {
@@ -322,22 +322,20 @@ unsafe extern "system" fn enum_callback(hwnd: isize, _lparam: isize) -> i32 {
     1 // continue
 }
 
-unsafe fn paste_to_window(mut hwnd: isize) {
-    // If no HWND bound, fall back to EnumWindows search
-    if hwnd == 0 {
-        {
-            *FOUND_HWND.lock().unwrap() = 0;
-        }
-        EnumWindows(Some(enum_callback), 0);
-        hwnd = *FOUND_HWND.lock().unwrap();
+unsafe fn paste_to_window(bound_hwnd: isize) {
+    // 1. Search for the current topmost "claude" window
+    {
+        *FOUND_HWND.lock().unwrap() = 0;
+    }
+    EnumWindows(Some(enum_callback), 0);
+    let mut hwnd = *FOUND_HWND.lock().unwrap();
+
+    // 2. Fall back to bound HWND if search found nothing (e.g. terminal minimized)
+    if hwnd == 0 && bound_hwnd != 0 && IsWindow(bound_hwnd) != 0 {
+        hwnd = bound_hwnd;
     }
 
     if hwnd == 0 {
-        return;
-    }
-
-    // Validate the window is still alive
-    if IsWindow(hwnd) == 0 {
         return;
     }
 

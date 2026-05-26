@@ -134,7 +134,7 @@ MCP Tool 调用
 
 ### 6. 双向消息同步
 
-用户可在爱弥斯右键菜单中选择"发消息"，输入内容后发送。爱弥斯启动时通过 `GetForegroundWindow()` 捕获 Claude Code 终端窗口 HWND，后续发消息直接用该 HWND 粘贴，无需搜索窗口。若启动时未捕获到（手动启动场景），则回退到 EnumWindows 搜索。
+用户可在爱弥斯右键菜单中选择"发消息"，输入内容后发送。发消息时先通过 `EnumWindows` 实时搜索当前最前面含 "claude" 的窗口，搜到则直接粘贴。若搜不到（终端最小化或后台），回退到启动时绑定的 HWND。支持多标签页终端（Windows Terminal），自动定位到当前活跃的 Claude Code 标签页。
 
 新端点：
 - `POST /api/user/message` — 接收用户消息
