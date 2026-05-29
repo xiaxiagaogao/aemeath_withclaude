@@ -81,7 +81,7 @@ async fn main() {
 
     // Build Tauri app
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![start_drag, hide_window, exit_app])
+        .invoke_handler(tauri::generate_handler![start_drag, hide_window, exit_app, set_window_size])
         .setup(move |app| {
             // Listen to broadcast channel, forward state changes to frontend
             let handle = app.handle().clone();
@@ -159,4 +159,12 @@ fn hide_window(window: tauri::Window) {
 #[tauri::command]
 fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+/// Resize the pet window to the given logical (CSS-pixel) dimensions.
+/// Frontend persists the choice in localStorage and pairs the resize with
+/// a matching `transform: scale()` on the body so the sprite scales too.
+#[tauri::command]
+fn set_window_size(window: tauri::Window, width: u32, height: u32) {
+    let _ = window.set_size(tauri::LogicalSize::new(width, height));
 }

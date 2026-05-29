@@ -15,8 +15,8 @@
       {
         "label": "aemeath",
         "title": "Aemeath",
-        "width": 192,
-        "height": 255,
+        "width": 144,
+        "height": 191,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

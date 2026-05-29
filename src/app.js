@@ -70,6 +70,41 @@ async function init() {
 
   // Expose for bubble.js choice buttons
   window._sendUserInput = sendUserInput;
+
+  // Restore previously chosen pet size (silently, no bubble).
+  // Default is index 0 (中), which needs no resize call.
+  const savedIdx = parseInt(localStorage.getItem(SIZE_KEY) || '0', 10);
+  if (savedIdx > 0) applySize(savedIdx, false);
+}
+
+// ========== Pet size (resize via tray menu) ==========
+
+const SIZES = [
+  { name: '中', w: 144, h: 191, cls: '' },        // default: scale 0.75 (base CSS)
+  { name: '大', w: 192, h: 255, cls: 'size-lg' }, // scale 1.0 (full natural)
+  { name: '小', w: 96,  h: 128, cls: 'size-sm' }, // scale 0.5
+];
+const SIZE_KEY = 'aemeath-size-idx';
+
+function applySize(idx, showBubble = true) {
+  const s = SIZES[idx];
+  if (!s) return;
+  document.body.classList.remove('size-sm', 'size-lg');
+  if (s.cls) document.body.classList.add(s.cls);
+  try {
+    window.__TAURI_INTERNALS__?.invoke('set_window_size', { width: s.w, height: s.h });
+  } catch (_) {}
+  try {
+    localStorage.setItem(SIZE_KEY, String(idx));
+  } catch (_) {}
+  if (showBubble && window._petBubble) {
+    window._petBubble.show(`大小: ${s.name}`);
+  }
+}
+
+function cycleSize() {
+  const cur = parseInt(localStorage.getItem(SIZE_KEY) || '0', 10);
+  applySize((cur + 1) % SIZES.length);
 }
 
 // ========== Tauri event listener (primary channel) ==========
@@ -291,6 +326,9 @@ function setupQuickMenu() {
       switch (action) {
         case 'message':
           bubble.showInteractive('发消息给爱弥斯...', 'text', null, '输入消息...');
+          break;
+        case 'resize':
+          cycleSize();
           break;
         case 'voice':
           bubble.show('语音输入暂不支持~');
